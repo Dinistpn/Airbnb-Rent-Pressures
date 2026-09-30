@@ -1,0 +1,14 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Power BI auto-save temp files
+*.tmp
+
+# Operating system files
+.DS_Store
+Thumbs.db

@@ -1,10 +1,10 @@
 # 🏠 Short-Term Rental Demand vs. Long-Term Housing Rent Inflation in Southern Europe
 
-A macroeconomic ETL, statistical, and Power BI visualization pipeline analyzing the relationship between short-term platform rentals (e.g., Airbnb) and residential lease price growth across **Spain (ES)**, **Italy (IT)**, and **Portugal (PT)** from **2019 to 2024**.
+A macroeconomic ETL, statistical analysis, and Power BI dashboard project investigating the relationship between short-term platform rentals (e.g., Airbnb) and residential lease price growth across **Spain (ES)**, **Italy (IT)**, and **Portugal (PT)** from **2019 to 2024**.
 
 ---
 
-## 📌 Executive Summary & Key Analytical Findings
+## 📌 Executive Summary & Key Findings
 
 A common policy assumption is that expansion in short-term tourist rentals immediately drives up residential rents. However, this macro statistical analysis reveals a **time-lagged transmission mechanism**:
 
@@ -55,36 +55,61 @@ airbnb_vs_rent_es_it_pt.csv             Local SQLite / Postgres
 
 ### 2. Tech Stack
 * **Language / ETL:** Python (`pandas`, `requests`, `sqlalchemy`, `numpy`)
-* **Storage:** PostgreSQL / SQLite / Clean CSV Exports
-* **Business Intelligence:** Power BI Desktop (DAX Time-Intelligence, `DimDate` dimensional modeling)
+* **Database:** PostgreSQL (pgAdmin 4) / SQLite
+* **Business Intelligence:** Power BI Desktop (DAX Time-Intelligence, `DimDate` star schema)
 
 ---
 
-## 🚀 Getting Started
+## 📁 Repository Structure
 
-### Prerequisites
-* Python 3.9+
-* Power BI Desktop (for visual reporting)
-* PostgreSQL or SQLite (optional for staging)
+```text
+Airbnb-Rent-Pressures/
+│
+├── .gitignore                   # Excludes raw cache, virtual envs, and temporary files
+├── LICENSE                      # Dual license (MIT for code, CC BY 4.0 for data)
+├── README.md                    # Project documentation and summary
+├── requirements.txt             # Python dependencies
+│
+├── data/                        # Dataset directory
+│   └── processed/
+│       └── airbnb_vs_rent_es_it_pt.csv   # Aggregated dataset (2019-2024)
+│
+├── src/                         # Python ETL source code
+│   ├── extract.py               # Eurostat API extraction
+│   └── transform.py             # Data transformation & feature engineering
+│
+├── sql/                         # Database scripts
+│   ├── schema.sql               # DDL table creation for PostgreSQL/pgAdmin
+│   └── analysis_queries.sql     # Lagged correlation & 3MA SQL queries
+│
+└── power_bi/                    # Power BI deliverables
+    ├── Airbnb_Rent_Pressures.pbix   # Power BI Desktop report file
+    └── measures.dax             # Custom DAX calculations backup
+🚀 Getting Started
+Prerequisites
+Python 3.9+
 
-### 1. Clone Repository & Setup Virtual Environment
-```bash
-git clone [https://github.com/your-username/housing-tourism-analysis.git](https://github.com/your-username/housing-tourism-analysis.git)
-cd housing-tourism-analysis
+Power BI Desktop
+
+PostgreSQL / pgAdmin 4 or SQLite
+
+1. Clone Repository & Setup Environment
+Bash
+git clone [https://github.com/Dinistpn/Airbnb-Rent-Pressures.git](https://github.com/Dinistpn/Airbnb-Rent-Pressures.git)
+cd Airbnb-Rent-Pressures
 
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-2. Run Data Extraction & Processing Script
+2. Execute Data Pipeline
 Bash
-python etl_script.py
-Outputs generated: airbnb_vs_rent_es_it_pt.csv and housing_tourism_db.db (SQLite).
+python src/extract.py
+python src/transform.py
+Generated output: Saved to data/processed/airbnb_vs_rent_es_it_pt.csv.
 
-📈 Power BI Data Model & DAX Measures
-The Power BI model utilizes a Star Schema with a dedicated DimDate dimension table linked via a 1:N (One-to-Many) relationship to airbnb_vs_rent_es_it_pt[date].
-
-Key Custom DAX Measures
-3-Month Moving Average (Smooths Seasonality):
+📈 Key DAX & SQL Analytical Calculations
+1. 3-Month Moving Average DAX Measure (Power BI)
+Calculates smoothed 3-month moving averages across monthly dates to remove high summer seasonality:
 
 Fragment kodu
 Airbnb_Nights_3MA = 
@@ -98,30 +123,26 @@ RETURN
         'airbnb_vs_rent_es_it_pt'[date] <= CurrentDate,
         VALUES('airbnb_vs_rent_es_it_pt'[geo])
     )
-Lead-Lag Pearson Correlation Measure:
+2. Lagged Pearson Correlation SQL Query (PostgreSQL / pgAdmin)
+SQL
+WITH lagged_data AS (
+    SELECT 
+        geo,
+        date,
+        rent_yoy_pct,
+        LAG(airbnb_yoy_pct, 12) OVER (PARTITION BY geo ORDER BY date) AS airbnb_yoy_lag12
+    FROM airbnb_vs_rent
+)
+SELECT 
+    geo AS country,
+    COUNT(*) AS sample_size,
+    ROUND(CORR(airbnb_yoy_lag12, rent_yoy_pct)::numeric, 4) AS pearson_corr_12m_lag
+FROM lagged_data
+WHERE airbnb_yoy_lag12 IS NOT NULL 
+GROUP BY geo
+ORDER BY geo;
 
-Fragment kodu
-Lag12_Pearson_Correlation = 
-VAR AvgX = CALCULATE(AVERAGE('airbnb_vs_rent_es_it_pt'[airbnb_yoy_pct]), ALLSELECTED('airbnb_vs_rent_es_it_pt'))
-VAR AvgY = CALCULATE(AVERAGE('airbnb_vs_rent_es_it_pt'[rent_yoy_pct]), ALLSELECTED('airbnb_vs_rent_es_it_pt'))
-VAR N = COUNTROWS('airbnb_vs_rent_es_it_pt')
-
-VAR SampleCovariance = 
-    DIVIDE(
-        SUMX(
-            'airbnb_vs_rent_es_it_pt', 
-            ('airbnb_vs_rent_es_it_pt'[airbnb_yoy_pct] - AvgX) * ('airbnb_vs_rent_es_it_pt'[rent_yoy_pct] - AvgY)
-        ),
-        N - 1,
-        0
-    )
-
-VAR StDevX = STDEV.S('airbnb_vs_rent_es_it_pt'[airbnb_yoy_pct])
-VAR StDevY = STDEV.S('airbnb_vs_rent_es_it_pt'[rent_yoy_pct])
-
-RETURN 
-    DIVIDE(SampleCovariance, StDevX * StDevY, BLANK())
 ⚖️ License & Attribution
-Software & Analytics Code: Released under the MIT License.
+Software & Code: Released under the MIT License.
 
-Data Sources: Re-used under the Eurostat Open Data Terms / Creative Commons Attribution 4.0 International (CC BY 4.0).
+Data Sources: Re-used under Eurostat Open Data Terms / Creative Commons Attribution 4.0 International (CC BY 4.0).
